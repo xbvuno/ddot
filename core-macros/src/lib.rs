@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, Expr, Fields, parse_macro_input};
+use syn::{DeriveInput, Expr, Fields, Type, parse_macro_input};
 
 #[proc_macro_derive(Filter, attributes(filter))]
 pub fn derive_filter(input: TokenStream) -> TokenStream {
@@ -16,11 +16,22 @@ pub fn derive_filter(input: TokenStream) -> TokenStream {
     let filter_name = to_snake_case(&filter_ident.to_string());
 
     quote! {
+        impl #filter_ident {
+            pub const NAME: &'static str = #filter_name;
+
+            pub const fn definition() -> ::ddot_core::filter::FilterDefinition {
+                ::ddot_core::filter::FilterDefinition {
+                    name: Self::NAME,
+                    params: <#params_ident as ::ddot_core::filter::FilterParams>::PARAMS,
+                }
+            }
+        }
+
         impl ::ddot_core::filter::Filter for #filter_ident {
             type Params = #params_ident;
 
             fn name(&self) -> &'static str {
-                #filter_name
+                Self::NAME
             }
 
             fn apply(
@@ -57,13 +68,74 @@ pub fn derive_filter_params(input: TokenStream) -> TokenStream {
         }
     };
 
-    let validations = match build_param_validations(fields) {
-        Ok(validations) => validations,
+    let params = match build_params(fields) {
+        Ok(params) => params,
         Err(error) => return error.to_compile_error().into(),
     };
 
+    let defaults = params.iter().map(|param| {
+        let field_ident = &param.ident;
+        let default = param.constraints.default_expr();
+
+        quote! {
+            #field_ident: #default
+        }
+    });
+
+    let definitions = params.iter().map(|param| {
+        let field_name = param.ident.to_string();
+        let kind = param.kind_tokens();
+        let min = option_f32_tokens(&param.constraints.min);
+        let max = option_f32_tokens(&param.constraints.max);
+        let default = param.constraints.default_expr();
+
+        quote! {
+            ::ddot_core::filter::ParamDefinition {
+                name: #field_name,
+                kind: #kind,
+                min: #min,
+                max: #max,
+                default: (#default) as f32,
+            }
+        }
+    });
+
+    let validations = params.iter().filter_map(|param| {
+        let field_ident = &param.ident;
+        let field_name = field_ident.to_string();
+        let min = param.constraints.min.as_ref()?;
+        let max = param.constraints.max.as_ref()?;
+
+        Some(quote! {
+            if self.#field_ident < #min
+                || self.#field_ident > #max
+            {
+                return Err(
+                    ::ddot_core::filter::ParamError::OutOfRange {
+                        name: #field_name,
+                        value: self.#field_ident.to_string(),
+                        min: stringify!(#min).to_string(),
+                        max: stringify!(#max).to_string(),
+                    }
+                );
+            }
+        })
+    });
+
     quote! {
+        impl ::std::default::Default for #params_ident {
+            fn default() -> Self {
+                Self {
+                    #(#defaults,)*
+                }
+            }
+        }
+
         impl ::ddot_core::filter::FilterParams for #params_ident {
+            const PARAMS: &'static [::ddot_core::filter::ParamDefinition] = &[
+                #(#definitions,)*
+            ];
+
             fn validate(
                 &self,
             ) -> Result<(), ::ddot_core::filter::ParamError> {
@@ -105,8 +177,8 @@ fn parse_filter_params_type(attrs: &[syn::Attribute]) -> syn::Result<syn::Ident>
     ))
 }
 
-fn build_param_validations(fields: Fields) -> syn::Result<Vec<proc_macro2::TokenStream>> {
-    let mut validations = Vec::new();
+fn build_params(fields: Fields) -> syn::Result<Vec<ParamField>> {
+    let mut params = Vec::new();
 
     let named_fields = match fields {
         Fields::Named(fields) => fields.named,
@@ -124,39 +196,89 @@ fn build_param_validations(fields: Fields) -> syn::Result<Vec<proc_macro2::Token
             .clone()
             .ok_or_else(|| syn::Error::new_spanned(&field, "FilterParams requires named fields"))?;
 
-        let field_name = field_ident.to_string();
-
         let constraints = parse_param_constraints(&field.attrs)?;
+        let kind = ParamKind::from_type(&field.ty)?;
 
-        if constraints.min.is_some() && constraints.max.is_some() {
-            let min = constraints.min.unwrap();
-
-            let max = constraints.max.unwrap();
-
-            validations.push(quote! {
-                if self.#field_ident < #min
-                    || self.#field_ident > #max
-                {
-                    return Err(
-                        ::ddot_core::filter::ParamError::OutOfRange {
-                            name: #field_name,
-                            value: self.#field_ident.to_string(),
-                            min: stringify!(#min).to_string(),
-                            max: stringify!(#max).to_string(),
-                        }
-                    );
-                }
-            });
-        }
+        params.push(ParamField {
+            ident: field_ident,
+            constraints,
+            kind,
+        });
     }
 
-    Ok(validations)
+    Ok(params)
 }
 
-#[derive(Default)]
+struct ParamField {
+    ident: syn::Ident,
+    constraints: ParamConstraints,
+    kind: ParamKind,
+}
+
+impl ParamField {
+    fn kind_tokens(&self) -> proc_macro2::TokenStream {
+        match self.kind {
+            ParamKind::Int => quote!(::ddot_core::filter::ParamType::Int),
+            ParamKind::Float => quote!(::ddot_core::filter::ParamType::Float),
+        }
+    }
+}
+
+enum ParamKind {
+    Int,
+    Float,
+}
+
+impl ParamKind {
+    fn from_type(ty: &Type) -> syn::Result<Self> {
+        let Type::Path(path) = ty else {
+            return Err(syn::Error::new_spanned(
+                ty,
+                "param fields must be integer or floating point primitives",
+            ));
+        };
+
+        let Some(segment) = path.path.segments.last() else {
+            return Err(syn::Error::new_spanned(
+                ty,
+                "param fields must be integer or floating point primitives",
+            ));
+        };
+
+        match segment.ident.to_string().as_str() {
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
+            | "u128" | "usize" => Ok(Self::Int),
+            "f32" | "f64" => Ok(Self::Float),
+            _ => Err(syn::Error::new_spanned(
+                ty,
+                "unsupported param type; expected an integer or floating point primitive",
+            )),
+        }
+    }
+}
+
 struct ParamConstraints {
     min: Option<Expr>,
     max: Option<Expr>,
+    default: Option<Expr>,
+}
+
+impl Default for ParamConstraints {
+    fn default() -> Self {
+        Self {
+            min: None,
+            max: None,
+            default: None,
+        }
+    }
+}
+
+impl ParamConstraints {
+    fn default_expr(&self) -> &Expr {
+        self.default
+            .as_ref()
+            .expect("default is required before code generation")
+    }
 }
 
 fn parse_param_constraints(attrs: &[syn::Attribute]) -> syn::Result<ParamConstraints> {
@@ -178,7 +300,7 @@ fn parse_param_constraints(attrs: &[syn::Attribute]) -> syn::Result<ParamConstra
                 Ok(())
             } else if meta.path.is_ident("default") {
                 let value = meta.value()?;
-                let _: Expr = value.parse()?;
+                constraints.default = Some(value.parse()?);
                 Ok(())
             } else {
                 Err(meta.error("unsupported param attribute"))
@@ -186,7 +308,21 @@ fn parse_param_constraints(attrs: &[syn::Attribute]) -> syn::Result<ParamConstra
         })?;
     }
 
+    if constraints.default.is_none() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "param attributes must include default = ...",
+        ));
+    }
+
     Ok(constraints)
+}
+
+fn option_f32_tokens(expr: &Option<Expr>) -> proc_macro2::TokenStream {
+    match expr {
+        Some(expr) => quote!(Some((#expr) as f32)),
+        None => quote!(None),
+    }
 }
 
 fn to_snake_case(name: &str) -> String {

@@ -18,11 +18,23 @@ struct Cli {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    #[arg(long, default_value_t = 0, allow_negative_numbers = true)]
-    brightness: i32,
+    #[arg(long, default_value_t = 1.0)]
+    gamma: f32,
+
+    #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+    blacks: f32,
+
+    #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+    whites: f32,
 
     #[arg(long, default_value_t = 0, allow_negative_numbers = true)]
     contrast: i32,
+
+    #[arg(long, default_value_t = 1.0)]
+    saturation: f32,
+
+    #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+    hue: f32,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -33,8 +45,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| default_output_path(&cli.input));
 
     let params = AdjustmentParams {
-        brightness: cli.brightness,
+        gamma: cli.gamma,
+        blacks: cli.blacks,
+        whites: cli.whites,
         contrast: cli.contrast,
+        saturation: cli.saturation,
+        hue: cli.hue,
     };
 
     params.validate()?;

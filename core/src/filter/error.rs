@@ -41,3 +41,52 @@ impl fmt::Display for ParamError {
 }
 
 impl Error for ParamError {}
+
+#[derive(Debug)]
+pub enum FilterError {
+    UnknownFilter(String),
+
+    InvalidSettings(serde_json::Error),
+
+    InvalidParams(ParamError),
+}
+
+impl fmt::Display for FilterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FilterError::UnknownFilter(name) => {
+                write!(formatter, "unknown filter '{name}'")
+            }
+
+            FilterError::InvalidSettings(error) => {
+                write!(formatter, "invalid filter settings: {error}")
+            }
+
+            FilterError::InvalidParams(error) => {
+                write!(formatter, "{error}")
+            }
+        }
+    }
+}
+
+impl Error for FilterError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            FilterError::UnknownFilter(_) => None,
+            FilterError::InvalidSettings(error) => Some(error),
+            FilterError::InvalidParams(error) => Some(error),
+        }
+    }
+}
+
+impl From<serde_json::Error> for FilterError {
+    fn from(error: serde_json::Error) -> Self {
+        FilterError::InvalidSettings(error)
+    }
+}
+
+impl From<ParamError> for FilterError {
+    fn from(error: ParamError) -> Self {
+        FilterError::InvalidParams(error)
+    }
+}

@@ -1,10 +1,7 @@
-use super::error::ParamError;
-
+use super::{ParamDefinition, error::ParamError};
 
 pub trait FilterParams {
+    const PARAMS: &'static [ParamDefinition];
 
-    fn validate(
-        &self
-    ) -> Result<(), ParamError>;
-
+    fn validate(&self) -> Result<(), ParamError>;
 }

@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
 ddot-core-macros = { version = "0.1.0", path = "../core-macros" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -4,6 +4,7 @@ pub use color::Color;
 
 use bytemuck::{cast_slice, cast_slice_mut};
 
+#[derive(Clone)]
 pub struct Image {
     pub width: u32,
 
