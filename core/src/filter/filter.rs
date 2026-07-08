@@ -11,7 +11,7 @@ pub trait Filter {
 
     fn name(&self) -> &'static str;
 
-
+ 
     fn apply(
         &self,
         image: &mut Image,
