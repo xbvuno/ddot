@@ -1,5 +1,7 @@
-pub mod filter;
-pub mod definition;
-pub mod adjustment;
+mod adjustment;
 
-pub use adjustment::Adjustment;
+
+pub use adjustment::{
+    Adjustment,
+    AdjustmentParams,
+};

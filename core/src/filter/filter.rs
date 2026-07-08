@@ -1,6 +1,6 @@
 use crate::{
     image::Image,
-    filter::params::FilterParams,
+    filter::FilterParams,
 };
 
 

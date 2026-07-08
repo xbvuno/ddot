@@ -1,22 +1,5 @@
-mod core;
-mod filters;
+extern crate self as ddot_core;
 
-
-use wasm_bindgen::prelude::*;
-
-use filters::{
-    Adjustment,
-    filter::Filter,
-};
-
-
-#[wasm_bindgen]
-pub fn get_filters() -> JsValue {
-
-    let filters = vec![
-        Adjustment::definition(),
-    ];
-
-    serde_wasm_bindgen::to_value(&filters)
-        .unwrap()
-}
+pub mod image;
+pub mod filter;
+pub mod filters;
