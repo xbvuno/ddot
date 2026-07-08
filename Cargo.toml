@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "core",
+    "cli",
+    "wasm", 
+    "core-macros",
+]
+
+resolver = "2"
