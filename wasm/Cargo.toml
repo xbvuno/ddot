@@ -19,3 +19,7 @@ version = "0.3"
 features = [
     "ImageData",
 ]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
