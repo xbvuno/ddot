@@ -17,6 +17,7 @@ use ddot_core::{
             OnlyPalette, OnlyPaletteParams,
         },
     },
+    transform,
 };
 use js_sys::{Array, Reflect};
 use wasm_bindgen::{Clamped, prelude::*};
@@ -735,5 +736,31 @@ impl WasmBayer {
         Ok(())
     }
 }
+
+#[wasm_bindgen]
+pub struct Transform;
+
+#[wasm_bindgen]
+impl Transform {
+    #[wasm_bindgen(js_name = Resize)]
+    pub fn resize(image: &WasmImage, settings: JsValue) -> Result<WasmImage, JsValue> {
+        let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let width = val.get("width")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing width parameter"))?;
+
+        let height = val.get("height")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing height parameter"))?;
+
+        let scaled = transform::resize(&image.inner, width, height);
+        Ok(WasmImage { inner: scaled })
+    }
+}
+
 
 
