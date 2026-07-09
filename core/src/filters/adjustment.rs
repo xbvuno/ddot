@@ -2,7 +2,7 @@ use ddot_core_macros::{Filter, FilterParams};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
-use crate::image::Image;
+use crate::image::{Color, Image};
 
 #[derive(Clone, Debug, Deserialize, FilterParams, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -31,21 +31,35 @@ pub struct AdjustmentParams {
 pub struct Adjustment;
 impl Adjustment {
     pub fn apply(&self, image: &mut Image, params: &AdjustmentParams) {
-        if params.gamma != 1.0
+        let do_lut = params.gamma != 1.0
             || params.blacks != 0.0
             || params.whites != 0.0
-            || params.contrast != 0
-        {
-            let lut = Self::build_lut(params);
-            Self::apply_lut(image, &lut);
-        }
+            || params.contrast != 0;
 
-        if params.saturation != 1.0 {
-            Self::apply_saturation(image, params.saturation);
-        }
+        let do_sat = params.saturation != 1.0;
+        let do_hue = params.hue != 0.0;
 
-        if params.hue != 0.0 {
-            Self::apply_hue(image, params.hue);
+        let lut = if do_lut {
+            Some(Self::build_lut(params))
+        } else {
+            None
+        };
+
+        let cos_h = params.hue.cos();
+        let sin_h = params.hue.sin();
+
+        for color in image.colors_mut() {
+            if let Some(lut) = &lut {
+                Self::apply_lut(color, lut);
+            }
+
+            if do_sat {
+                Self::apply_saturation(color, params.saturation);
+            }
+
+            if do_hue {
+                Self::apply_hue(color, cos_h, sin_h);
+            }
         }
     }
 
@@ -65,7 +79,7 @@ impl Adjustment {
         let mut lut = [0u8; 256];
 
         for i in 0..256 {
-            let mut v = i as f32 / 255.0;
+            let mut v = i as f32 * (1.0 / 255.0);
 
             if params.gamma != 1.0 {
                 v = v.powf(gamma_exp);
@@ -93,62 +107,58 @@ impl Adjustment {
         lut
     }
 
-    #[inline]
-    fn apply_lut(image: &mut Image, lut: &[u8; 256]) {
-        for color in image.colors_mut() {
-            color.r = lut[color.r as usize];
-            color.g = lut[color.g as usize];
-            color.b = lut[color.b as usize];
-        }
+    #[inline(always)]
+    fn apply_lut(color: &mut Color, lut: &[u8; 256]) {
+        color.r = lut[color.r as usize];
+        color.g = lut[color.g as usize];
+        color.b = lut[color.b as usize];
     }
 
-    #[inline]
-    fn apply_saturation(image: &mut Image, saturation: f32) {
-        for color in image.colors_mut() {
-            let mut r = color.r as f32 / 255.0;
-            let mut g = color.g as f32 / 255.0;
-            let mut b = color.b as f32 / 255.0;
+    #[inline(always)]
+    fn apply_saturation(color: &mut Color, saturation: f32) {
+        let mut r = color.r as f32 * (1.0 / 255.0);
+        let mut g = color.g as f32 * (1.0 / 255.0);
+        let mut b = color.b as f32 * (1.0 / 255.0);
 
-            let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-            r = gray + (r - gray) * saturation;
-            g = gray + (g - gray) * saturation;
-            b = gray + (b - gray) * saturation;
-
-            color.r = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
-            color.g = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
-            color.b = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
+        if saturation == 0.0 {
+            let gray = (gray * 255.0).round() as u8;
+            color.r = gray;
+            color.g = gray;
+            color.b = gray;
+            return;
         }
+
+        r = gray + (r - gray) * saturation;
+        g = gray + (g - gray) * saturation;
+        b = gray + (b - gray) * saturation;
+
+        color.r = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
+        color.g = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
+        color.b = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
     }
 
-    #[inline]
-    fn apply_hue(image: &mut Image, hue: f32) {
-        let cos_h = hue.cos();
-        let sin_h = hue.sin();
+    #[inline(always)]
+    fn apply_hue(color: &mut Color, cos_h: f32, sin_h: f32) {
+        let mut r = color.r as f32 * (1.0 / 255.0);
+        let mut g = color.g as f32 * (1.0 / 255.0);
+        let mut b = color.b as f32 * (1.0 / 255.0);
 
-        for color in image.colors_mut() {
-            let mut r = color.r as f32 / 255.0;
-            let mut g = color.g as f32 / 255.0;
-            let mut b = color.b as f32 / 255.0;
+        let y = 0.299 * r + 0.587 * g + 0.114 * b;
+        let i = 0.596 * r - 0.274 * g - 0.322 * b;
+        let q = 0.211 * r - 0.523 * g + 0.312 * b;
 
-            // RGB -> YIQ
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
-            let i = 0.596 * r - 0.274 * g - 0.322 * b;
-            let q = 0.211 * r - 0.523 * g + 0.312 * b;
+        let i2 = i * cos_h - q * sin_h;
+        let q2 = i * sin_h + q * cos_h;
 
-            // Rotate hue
-            let i2 = i * cos_h - q * sin_h;
-            let q2 = i * sin_h + q * cos_h;
+        r = y + 0.956 * i2 + 0.621 * q2;
+        g = y - 0.272 * i2 - 0.647 * q2;
+        b = y - 1.106 * i2 + 1.703 * q2;
 
-            // YIQ -> RGB
-            r = y + 0.956 * i2 + 0.621 * q2;
-            g = y - 0.272 * i2 - 0.647 * q2;
-            b = y - 1.106 * i2 + 1.703 * q2;
-
-            color.r = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
-            color.g = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
-            color.b = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
-        }
+        color.r = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
+        color.g = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
+        color.b = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
     }
 }
 
