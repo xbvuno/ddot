@@ -116,6 +116,11 @@ pub enum Backend {
     Gpu = 2,
 }
 
+#[wasm_bindgen(js_name = isGpuAvailable)]
+pub async fn is_gpu_available() -> bool {
+    filters::is_gpu_available().await
+}
+
 #[wasm_bindgen]
 pub struct FilterHandle {
     name: String,
@@ -133,6 +138,14 @@ impl FilterHandle {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         self.name.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        match filters::filter_backend_support(&self.name) {
+            Some(ddot_core::filter::BackendSupport::CpuAndGpu) => true,
+            _ => false,
+        }
     }
 
     #[wasm_bindgen(getter, js_name = backendSupport)]

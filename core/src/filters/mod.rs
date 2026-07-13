@@ -87,6 +87,10 @@ async fn dispatch_filter<F: Filter>(
     }
 }
 
+pub async fn is_gpu_available() -> bool {
+    crate::filter::gpu::is_gpu_available().await
+}
+
 pub async fn apply_filter(
     image: &mut Image,
     name: &str,

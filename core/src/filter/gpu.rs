@@ -65,6 +65,10 @@ async fn init_gpu_state() -> Option<WgpuState> {
     Some(WgpuState { device, queue })
 }
 
+pub async fn is_gpu_available() -> bool {
+    get_wgpu_state().await.is_some()
+}
+
 pub async fn run_gpu(
     shader_source: &str,
     image: &mut Image,
