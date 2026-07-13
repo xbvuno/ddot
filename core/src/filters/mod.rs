@@ -1,5 +1,6 @@
 mod adjustment;
 mod noise;
+mod gaussian_blur;
 
 use crate::{
     filter::{Filter, FilterDefinition, FilterError, FilterParams, BackendSupport},
@@ -8,10 +9,12 @@ use crate::{
 
 pub use adjustment::{Adjustment, AdjustmentParams};
 pub use noise::{Noise, NoiseParams};
+pub use gaussian_blur::{GaussianBlur, GaussianBlurParams};
 
 pub const FILTERS: &[FilterDefinition] = &[
     Adjustment::definition(),
     Noise::definition(),
+    GaussianBlur::definition(),
 ];
 
 pub fn filter_names() -> impl Iterator<Item = &'static str> {
@@ -26,6 +29,7 @@ pub fn filter_backend_support(name: &str) -> Option<BackendSupport> {
     match name {
         Adjustment::NAME => Some(Adjustment.backend_support()),
         Noise::NAME => Some(Noise.backend_support()),
+        GaussianBlur::NAME => Some(GaussianBlur.backend_support()),
         _ => None,
     }
 }
@@ -50,6 +54,13 @@ pub fn apply_filter(
             Ok(())
         }
 
+        GaussianBlur::NAME => {
+            let params: GaussianBlurParams = serde_json::from_value(settings)?;
+            params.validate()?;
+            GaussianBlur.apply(image, &params);
+            Ok(())
+        }
+
         _ => Err(FilterError::UnknownFilter(name.to_owned())),
     }
 }
@@ -58,6 +69,7 @@ pub fn filter_gpu_shader(name: &str) -> Option<&'static str> {
     match name {
         Adjustment::NAME => Adjustment.gpu_shader(),
         Noise::NAME => Noise.gpu_shader(),
+        GaussianBlur::NAME => GaussianBlur.gpu_shader(),
         _ => None,
     }
 }
