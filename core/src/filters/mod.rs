@@ -48,9 +48,9 @@ async fn dispatch_filter<F: Filter>(
                     Ok(()) => Ok(()),
                     Err(FilterError::GpuUnavailable) => {
                         #[cfg(target_arch = "wasm32")]
-                        web_sys::console::warn_1(&"WebGPU not available, falling back to CPU".into());
+                        web_sys::console::warn_1(&format!("Filter '{}' failed to run on GPU: WebGPU is not available, falling back to CPU", filter.name()).into());
                         #[cfg(not(target_arch = "wasm32"))]
-                        eprintln!("Warning: WebGPU not available, falling back to CPU");
+                        eprintln!("Warning: Filter '{}' failed to run on GPU: WebGPU is not available, falling back to CPU", filter.name());
 
                         filter.apply(image, params);
                         Ok(())
