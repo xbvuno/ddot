@@ -40,16 +40,36 @@ async fn get_wgpu_state() -> Option<(&'static wgpu::Device, &'static wgpu::Queue
 }
 
 async fn init_gpu_state() -> Option<WgpuState> {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&"Initializing wgpu Instance...".into());
+
     let instance = wgpu::Instance::default();
+
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&"Requesting wgpu Adapter...".into());
+
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
         })
-        .await?;
+        .await;
 
-    let (device, queue) = adapter
+    let adapter = match adapter {
+        Some(a) => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::log_1(&"wgpu Adapter found. Requesting Device...".into());
+            a
+        }
+        None => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::warn_1(&"Failed to acquire wgpu Adapter".into());
+            return None;
+        }
+    };
+
+    let device_result = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("ddot-wgpu-device"),
@@ -59,8 +79,20 @@ async fn init_gpu_state() -> Option<WgpuState> {
             },
             None,
         )
-        .await
-        .ok()?;
+        .await;
+
+    let (device, queue) = match device_result {
+        Ok((d, q)) => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::log_1(&"wgpu Device successfully created!".into());
+            (d, q)
+        }
+        Err(_e) => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::warn_1(&format!("Failed to create wgpu Device: {:?}", _e).into());
+            return None;
+        }
+    };
 
     Some(WgpuState { device, queue })
 }
