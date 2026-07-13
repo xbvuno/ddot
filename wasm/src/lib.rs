@@ -109,16 +109,23 @@ impl Filters {
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Backend {
-    Auto = 0,
-    Cpu = 1,
-    Gpu = 2,
-}
+pub struct Backend;
 
-#[wasm_bindgen(js_name = isGpuAvailable)]
-pub async fn is_gpu_available() -> bool {
-    filters::is_gpu_available().await
+#[wasm_bindgen]
+impl Backend {
+    #[wasm_bindgen(getter, js_name = AUTO)]
+    pub fn auto() -> i32 { 0 }
+
+    #[wasm_bindgen(getter, js_name = CPU)]
+    pub fn cpu() -> i32 { 1 }
+
+    #[wasm_bindgen(getter, js_name = GPU)]
+    pub fn gpu() -> i32 { 2 }
+
+    #[wasm_bindgen(js_name = isGpuAvailable)]
+    pub async fn is_gpu_available() -> bool {
+        filters::is_gpu_available().await
+    }
 }
 
 #[wasm_bindgen]
