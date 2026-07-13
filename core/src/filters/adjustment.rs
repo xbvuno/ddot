@@ -16,8 +16,8 @@ pub struct AdjustmentParams {
     #[param(min = -0.5, max = 0.5, default = 0.0)]
     pub whites: f32,
 
-    #[param(min = -100, max = 500, default = 0)]
-    pub contrast: i32,
+    #[param(min = -100.0, max = 500.0, default = 0.0)]
+    pub contrast: f32,
 
     #[param(min = 0.0, max = 10.0, default = 1.0)]
     pub saturation: f32,
@@ -41,7 +41,7 @@ impl Adjustment {
         let do_lut = params.gamma != 1.0
             || params.blacks != 0.0
             || params.whites != 0.0
-            || params.contrast != 0;
+            || params.contrast != 0.0;
 
         let do_sat = params.saturation != 1.0;
         let do_hue = params.hue != 0.0;
@@ -80,7 +80,7 @@ impl Adjustment {
     fn build_lut(params: &AdjustmentParams) -> [u8; 256] {
         let gamma_exp = 1.0 / params.gamma;
 
-        let contrast_val = (params.contrast as f32).clamp(-255.0, 258.0);
+        let contrast_val = params.contrast.clamp(-255.0, 258.0);
         let contrast_factor = (259.0 * (contrast_val + 255.0))
             / (255.0 * (259.0 - contrast_val));
 
@@ -105,7 +105,7 @@ impl Adjustment {
                 v += params.whites * highlight;
             }
 
-            if params.contrast != 0 {
+            if params.contrast != 0.0 {
                 v = (v - 0.5) * contrast_factor + 0.5;
             }
 
