@@ -170,6 +170,8 @@ dependencies = [
  "clap",
  "ddot-core",
  "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
