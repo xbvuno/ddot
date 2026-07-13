@@ -33,6 +33,10 @@ enum Commands {
         /// JSON pipeline inline string or path to a JSON pipeline file
         #[arg(short, long)]
         pipeline: String,
+
+        /// Backend to use: auto, cpu, or gpu (default: auto)
+        #[arg(short, long, default_value = "auto")]
+        backend: String,
     },
 
     /// List all available filters and their parameter metadata
@@ -59,8 +63,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             input,
             output,
             pipeline,
+            backend,
         } => {
-            handle_apply(input, output, pipeline)?;
+            handle_apply(input, output, pipeline, backend)?;
         }
         Commands::List => {
             handle_list()?;
@@ -77,6 +82,7 @@ fn handle_apply(
     input: PathBuf,
     output: Option<PathBuf>,
     pipeline: String,
+    backend: String,
 ) -> Result<(), Box<dyn Error>> {
     // 1. Read input pipeline string or file
     let pipeline_json = if Path::new(&pipeline).is_file() {
@@ -107,7 +113,7 @@ fn handle_apply(
             .into());
         }
 
-        if let Err(e) = filters::apply_filter(&mut image, &step.name, step.settings) {
+        if let Err(e) = pollster::block_on(filters::apply_filter(&mut image, &step.name, step.settings, &backend)) {
             return Err(format!(
                 "Error in pipeline step {} ('{}'): {}",
                 i + 1,

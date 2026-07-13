@@ -109,6 +109,14 @@ impl Filters {
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Backend {
+    Auto = 0,
+    Cpu = 1,
+    Gpu = 2,
+}
+
+#[wasm_bindgen]
 pub struct FilterHandle {
     name: String,
 }
@@ -127,6 +135,15 @@ impl FilterHandle {
         self.name.clone()
     }
 
+    #[wasm_bindgen(getter, js_name = backendSupport)]
+    pub fn backend_support(&self) -> Result<JsValue, JsValue> {
+        let support = filters::filter_backend_support(&self.name)
+            .ok_or_else(|| JsValue::from_str(&format!("unknown filter '{}'", self.name)))?;
+
+        serde_wasm_bindgen::to_value(&support)
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
     #[wasm_bindgen(js_name = getParams)]
     pub fn get_params(&self) -> Result<JsValue, JsValue> {
         let definition = filters::filter_definition(&self.name)
@@ -137,11 +154,35 @@ impl FilterHandle {
     }
 
     #[wasm_bindgen(js_name = apply)]
-    pub fn apply(&self, image: &mut WasmImage, settings: JsValue) -> Result<(), JsValue> {
+    pub async fn apply(
+        &self,
+        image: &mut WasmImage,
+        settings: JsValue,
+        backend: JsValue,
+    ) -> Result<(), JsValue> {
         let settings = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
 
-        filters::apply_filter(&mut image.inner, &self.name, settings)
+        let backend_str = if backend.is_undefined() || backend.is_null() {
+            "auto"
+        } else if let Some(s) = backend.as_string() {
+            match s.as_str() {
+                "cpu" => "cpu",
+                "gpu" => "gpu",
+                _ => "auto",
+            }
+        } else if let Some(n) = backend.as_f64() {
+            match n as i32 {
+                1 => "cpu",
+                2 => "gpu",
+                _ => "auto",
+            }
+        } else {
+            "auto"
+        };
+
+        filters::apply_filter(&mut image.inner, &self.name, settings, backend_str)
+            .await
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 }

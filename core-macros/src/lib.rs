@@ -45,6 +45,22 @@ pub fn derive_filter(input: TokenStream) -> TokenStream {
                     params,
                 );
             }
+
+            fn backend_support(&self) -> ::ddot_core::filter::BackendSupport {
+                use ::ddot_core::filter::detect::{GpuShaderDetect, GpuShaderFallback};
+                let wrap = ::ddot_core::filter::detect::Wrap::new(self);
+                if (&wrap).ddot_gpu_shader().is_some() {
+                    ::ddot_core::filter::BackendSupport::CpuAndGpu
+                } else {
+                    ::ddot_core::filter::BackendSupport::CpuOnly
+                }
+            }
+
+            fn gpu_shader(&self) -> ::std::option::Option<&'static str> {
+                use ::ddot_core::filter::detect::{GpuShaderDetect, GpuShaderFallback};
+                let wrap = ::ddot_core::filter::detect::Wrap::new(self);
+                (&wrap).ddot_gpu_shader()
+            }
         }
     }
     .into()
@@ -72,6 +88,8 @@ pub fn derive_filter_params(input: TokenStream) -> TokenStream {
         Ok(params) => params,
         Err(error) => return error.to_compile_error().into(),
     };
+
+    let field_idents: Vec<&syn::Ident> = params.iter().map(|p| &p.ident).collect();
 
     let defaults = params.iter().map(|param| {
         let field_ident = &param.ident;
@@ -142,6 +160,14 @@ pub fn derive_filter_params(input: TokenStream) -> TokenStream {
                 #(#validations)*
 
                 Ok(())
+            }
+
+            fn to_bytes(&self) -> ::std::vec::Vec<u8> {
+                let mut bytes = ::std::vec::Vec::new();
+                #(
+                    bytes.extend_from_slice(::bytemuck::bytes_of(&self.#field_idents));
+                )*
+                bytes
             }
         }
     }

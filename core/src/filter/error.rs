@@ -49,6 +49,12 @@ pub enum FilterError {
     InvalidSettings(serde_json::Error),
 
     InvalidParams(ParamError),
+
+    GpuUnavailable,
+
+    GpuExecutionFailed,
+
+    UnsupportedBackend,
 }
 
 impl fmt::Display for FilterError {
@@ -65,6 +71,18 @@ impl fmt::Display for FilterError {
             FilterError::InvalidParams(error) => {
                 write!(formatter, "{error}")
             }
+
+            FilterError::GpuUnavailable => {
+                write!(formatter, "GPU backend is not available")
+            }
+
+            FilterError::GpuExecutionFailed => {
+                write!(formatter, "GPU pipeline execution failed")
+            }
+
+            FilterError::UnsupportedBackend => {
+                write!(formatter, "filter does not support the requested backend")
+            }
         }
     }
 }
@@ -75,6 +93,9 @@ impl Error for FilterError {
             FilterError::UnknownFilter(_) => None,
             FilterError::InvalidSettings(error) => Some(error),
             FilterError::InvalidParams(error) => Some(error),
+            FilterError::GpuUnavailable => None,
+            FilterError::GpuExecutionFailed => None,
+            FilterError::UnsupportedBackend => None,
         }
     }
 }

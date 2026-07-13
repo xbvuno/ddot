@@ -88,14 +88,14 @@ cargo run --bin ddot-cli -- schema adjustment > step.json
 ```
 
 ### 3. Apply a Filter Pipeline
-Apply one or more filters in sequence to an input image. The `--pipeline` argument accepts either an inline JSON array string or a path to a JSON pipeline file:
+Apply one or more filters in sequence to an input image. The `--pipeline` argument accepts either an inline JSON array string or a path to a JSON pipeline file. You can select the backend using the `--backend` (or `-b`) flag:
 
-**Using inline JSON:**
+**Using inline JSON and CPU backend:**
 ```bash
-cargo run --bin ddot-cli -- apply input.jpg -o output.png --pipeline '[{"name": "adjustment", "settings": {"saturation": 0.0}}]'
+cargo run --bin ddot-cli -- apply input.jpg -o output.png --pipeline '[{"name": "adjustment", "settings": {"saturation": 0.0}}]' --backend cpu
 ```
 
-**Using a pipeline file:**
+**Using a pipeline file and GPU acceleration:**
 Create a pipeline configuration (`pipeline.json`):
 ```json
 [
@@ -115,9 +115,9 @@ Create a pipeline configuration (`pipeline.json`):
   }
 ]
 ```
-Execute it:
+Execute it on the GPU (non-supported filters like `noise` will automatically fallback to CPU with a warning):
 ```bash
-cargo run --bin ddot-cli -- apply input.jpg -o output.png --pipeline pipeline.json
+cargo run --bin ddot-cli -- apply input.jpg -o output.png --pipeline pipeline.json --backend gpu
 ```
 
 ---
@@ -146,18 +146,23 @@ const wasmImage = new Image(imageData);
 
 ### 2. Applying Filters Dynamically
 ```javascript
-import { Filters } from "ddot-wasm";
+import { Filters, Backend } from "ddot-wasm";
 
 // Get list of all available filters
 const filterHandles = Filters.getFilters();
 const adjustmentFilter = filterHandles.adjustment; // Retrieve by name
 
-// Apply adjustment filter
-adjustmentFilter.apply(wasmImage, {
+// Check supported backends ("cpuonly" or "cpuandgpu")
+console.log(adjustmentFilter.backendSupport);
+
+// Apply adjustment filter asynchronously (await is required)
+// The optional third argument specifies the backend: Backend.Auto (default), Backend.Cpu, Backend.Gpu
+// (You can also pass strings directly: "auto", "cpu", "gpu")
+await adjustmentFilter.apply(wasmImage, {
   gamma: 1.5,
   saturation: 0.8,
   contrast: 10
-});
+}, Backend.Gpu);
 
 // Render back to canvas
 const updatedImageData = wasmImage.toImageData();

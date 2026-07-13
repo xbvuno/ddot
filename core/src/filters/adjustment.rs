@@ -29,6 +29,13 @@ pub struct AdjustmentParams {
 #[derive(Filter)]
 #[filter(params = AdjustmentParams)]
 pub struct Adjustment;
+
+impl crate::filter::GpuFilter for Adjustment {
+    fn gpu_shader(&self) -> &'static str {
+        include_str!("gpu/adjustment.wgsl")
+    }
+}
+
 impl Adjustment {
     pub fn apply(&self, image: &mut Image, params: &AdjustmentParams) {
         let do_lut = params.gamma != 1.0
