@@ -6,11 +6,13 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use ddot_core::{
-    filter::ParamType,
+    filter::{ParamType, FilterParams},
     filters,
     image::Image,
 };
 use serde::Deserialize;
+
+mod gpu;
 
 #[derive(Debug, Parser)]
 #[command(name = "ddot", about = "Apply ddot filters to images", version = "0.1.0")]
@@ -113,7 +115,7 @@ fn handle_apply(
             .into());
         }
 
-        if let Err(e) = pollster::block_on(filters::apply_filter(&mut image, &step.name, step.settings, &backend)) {
+        if let Err(e) = pollster::block_on(apply_filter_cli(&mut image, &step.name, step.settings, &backend)) {
             return Err(format!(
                 "Error in pipeline step {} ('{}'): {}",
                 i + 1,
@@ -260,5 +262,69 @@ mod tests {
             default_output_path(Path::new("photo")),
             Path::new("photo_ddot.png")
         );
+    }
+}
+
+async fn apply_filter_cli(
+    image: &mut Image,
+    name: &str,
+    settings: serde_json::Value,
+    backend: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use ddot_core::filter::Filter;
+    use ddot_core::filters::{Adjustment, AdjustmentParams, Noise, NoiseParams};
+
+    match name {
+        Adjustment::NAME => {
+            let params: AdjustmentParams = serde_json::from_value(settings)?;
+            params.validate()?;
+
+            match backend {
+                "cpu" => {
+                    Adjustment.apply(image, &params);
+                    Ok(())
+                }
+                "gpu" => {
+                    if let Some(shader) = Adjustment.gpu_shader() {
+                        let params_bytes = params.to_bytes();
+                        gpu::run_gpu(shader, image, &params_bytes).await?;
+                        Ok(())
+                    } else {
+                        eprintln!("Warning: Filter '{}' does not support GPU backend, falling back to CPU", name);
+                        Adjustment.apply(image, &params);
+                        Ok(())
+                    }
+                }
+                _ => { // "auto"
+                    if let Some(shader) = Adjustment.gpu_shader() {
+                        let params_bytes = params.to_bytes();
+                        match gpu::run_gpu(shader, image, &params_bytes).await {
+                            Ok(()) => Ok(()),
+                            Err(ddot_core::filter::FilterError::GpuUnavailable) => {
+                                // Silent fallback
+                                Adjustment.apply(image, &params);
+                                Ok(())
+                            }
+                            Err(e) => Err(e.into()),
+                        }
+                    } else {
+                        Adjustment.apply(image, &params);
+                        Ok(())
+                    }
+                }
+            }
+        }
+        Noise::NAME => {
+            let params: NoiseParams = serde_json::from_value(settings)?;
+            params.validate()?;
+
+            // Noise is CPU-only
+            if backend == "gpu" {
+                eprintln!("Warning: Filter '{}' does not support GPU backend, falling back to CPU", name);
+            }
+            Noise.apply(image, &params);
+            Ok(())
+        }
+        _ => Err(format!("Unknown filter '{}'", name).into()),
     }
 }

@@ -30,87 +30,35 @@ pub fn filter_backend_support(name: &str) -> Option<BackendSupport> {
     }
 }
 
-async fn dispatch_filter<F: Filter>(
-    filter: &F,
-    image: &mut Image,
-    params: &F::Params,
-    backend: &str,
-) -> Result<(), FilterError> {
-    match backend {
-        "cpu" => {
-            filter.apply(image, params);
-            Ok(())
-        }
-        "gpu" => {
-            if let Some(shader) = filter.gpu_shader() {
-                let params_bytes = params.to_bytes();
-                match crate::filter::gpu::run_gpu(shader, image, &params_bytes).await {
-                    Ok(()) => Ok(()),
-                    Err(FilterError::GpuUnavailable) => {
-                        #[cfg(target_arch = "wasm32")]
-                        web_sys::console::warn_1(&format!("Filter '{}' failed to run on GPU: WebGPU is not available, falling back to CPU", filter.name()).into());
-                        #[cfg(not(target_arch = "wasm32"))]
-                        eprintln!("Warning: Filter '{}' failed to run on GPU: WebGPU is not available, falling back to CPU", filter.name());
-
-                        filter.apply(image, params);
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            } else {
-                #[cfg(target_arch = "wasm32")]
-                web_sys::console::warn_1(&format!("Filter '{}' does not support GPU backend, falling back to CPU", filter.name()).into());
-                #[cfg(not(target_arch = "wasm32"))]
-                eprintln!("Warning: Filter '{}' does not support GPU backend, falling back to CPU", filter.name());
-
-                filter.apply(image, params);
-                Ok(())
-            }
-        }
-        _ => { // "auto"
-            if let Some(shader) = filter.gpu_shader() {
-                let params_bytes = params.to_bytes();
-                match crate::filter::gpu::run_gpu(shader, image, &params_bytes).await {
-                    Ok(()) => Ok(()),
-                    Err(FilterError::GpuUnavailable) => {
-                        // Silent fallback for auto mode
-                        filter.apply(image, params);
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            } else {
-                filter.apply(image, params);
-                Ok(())
-            }
-        }
-    }
-}
-
-pub async fn is_gpu_available() -> bool {
-    crate::filter::gpu::is_gpu_available().await
-}
-
-pub async fn apply_filter(
+pub fn apply_filter(
     image: &mut Image,
     name: &str,
     settings: serde_json::Value,
-    backend: &str,
 ) -> Result<(), FilterError> {
     match name {
         Adjustment::NAME => {
             let params: AdjustmentParams = serde_json::from_value(settings)?;
             params.validate()?;
-            dispatch_filter(&Adjustment, image, &params, backend).await
+            Adjustment.apply(image, &params);
+            Ok(())
         }
 
         Noise::NAME => {
             let params: NoiseParams = serde_json::from_value(settings)?;
             params.validate()?;
-            dispatch_filter(&Noise, image, &params, backend).await
+            Noise.apply(image, &params);
+            Ok(())
         }
 
         _ => Err(FilterError::UnknownFilter(name.to_owned())),
+    }
+}
+
+pub fn filter_gpu_shader(name: &str) -> Option<&'static str> {
+    match name {
+        Adjustment::NAME => Adjustment.gpu_shader(),
+        Noise::NAME => Noise.gpu_shader(),
+        _ => None,
     }
 }
 
@@ -140,7 +88,7 @@ mod tests {
             pixels: vec![10, 20, 30, 255],
         };
 
-        pollster::block_on(apply_filter(
+        apply_filter(
             &mut image,
             "adjustment",
             json!({
@@ -151,8 +99,7 @@ mod tests {
                 "saturation": 1.0,
                 "hue": 0.0,
             }),
-            "cpu",
-        ))
+        )
         .expect("apply filter");
 
         assert_eq!(image.pixels, vec![10, 20, 30, 255]);
@@ -166,15 +113,14 @@ mod tests {
             pixels: vec![255, 0, 0, 255],
         };
 
-        pollster::block_on(apply_filter(
+        apply_filter(
             &mut image,
             "adjustment",
             json!({
                 "saturation": 0.0,
                 "hue": 0.0,
             }),
-            "cpu",
-        ))
+        )
         .expect("apply filter");
 
         assert_eq!(image.pixels, vec![54, 54, 54, 255]);
@@ -188,14 +134,13 @@ mod tests {
             pixels: vec![10, 20, 30, 255],
         };
 
-        let error = pollster::block_on(apply_filter(
+        let error = apply_filter(
             &mut image,
             "adjustment",
             json!({
                 "gamma": 3.1,
             }),
-            "cpu",
-        ))
+        )
         .expect_err("invalid params");
 
         assert!(error.to_string().contains("gamma"));

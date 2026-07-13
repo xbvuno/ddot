@@ -1,6 +1,5 @@
 mod definition;
 pub mod detect;
-pub mod gpu;
 mod error;
 mod filter;
 mod params;

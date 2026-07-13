@@ -70,6 +70,12 @@ impl WasmImage {
         self.inner.pixels.clone()
     }
 
+    /// Sets the pixel buffer.
+    #[wasm_bindgen(js_name = setPixels)]
+    pub fn set_pixels(&mut self, new_pixels: Vec<u8>) {
+        self.inner.pixels = new_pixels;
+    }
+
     /// Converts back to browser ImageData.
     #[wasm_bindgen(js_name = toImageData)]
     pub fn to_image_data(&self) -> Result<ImageData, JsValue> {
@@ -109,26 +115,6 @@ impl Filters {
 }
 
 #[wasm_bindgen]
-pub struct Backend;
-
-#[wasm_bindgen]
-impl Backend {
-    #[wasm_bindgen(getter, js_name = AUTO)]
-    pub fn auto() -> i32 { 0 }
-
-    #[wasm_bindgen(getter, js_name = CPU)]
-    pub fn cpu() -> i32 { 1 }
-
-    #[wasm_bindgen(getter, js_name = GPU)]
-    pub fn gpu() -> i32 { 2 }
-
-    #[wasm_bindgen(js_name = isGpuAvailable)]
-    pub async fn is_gpu_available() -> bool {
-        filters::is_gpu_available().await
-    }
-}
-
-#[wasm_bindgen]
 pub struct FilterHandle {
     name: String,
 }
@@ -155,6 +141,11 @@ impl FilterHandle {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        filters::filter_gpu_shader(&self.name).map(|s| s.to_string())
+    }
+
     #[wasm_bindgen(getter, js_name = backendSupport)]
     pub fn backend_support(&self) -> Result<JsValue, JsValue> {
         let support = filters::filter_backend_support(&self.name)
@@ -178,31 +169,12 @@ impl FilterHandle {
         &self,
         image: &mut WasmImage,
         settings: JsValue,
-        backend: JsValue,
+        _backend: JsValue,
     ) -> Result<(), JsValue> {
         let settings = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
 
-        let backend_str = if backend.is_undefined() || backend.is_null() {
-            "auto"
-        } else if let Some(s) = backend.as_string() {
-            match s.as_str() {
-                "cpu" => "cpu",
-                "gpu" => "gpu",
-                _ => "auto",
-            }
-        } else if let Some(n) = backend.as_f64() {
-            match n as i32 {
-                1 => "cpu",
-                2 => "gpu",
-                _ => "auto",
-            }
-        } else {
-            "auto"
-        };
-
-        filters::apply_filter(&mut image.inner, &self.name, settings, backend_str)
-            .await
+        filters::apply_filter(&mut image.inner, &self.name, settings)
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 }

@@ -1,5 +1,5 @@
-use crate::image::Image;
-use crate::filter::FilterError;
+use ddot_core::image::Image;
+use ddot_core::filter::FilterError;
 use std::sync::OnceLock;
 
 struct WgpuState {
@@ -40,36 +40,16 @@ async fn get_wgpu_state() -> Option<(&'static wgpu::Device, &'static wgpu::Queue
 }
 
 async fn init_gpu_state() -> Option<WgpuState> {
-    #[cfg(target_arch = "wasm32")]
-    web_sys::console::log_1(&"Initializing wgpu Instance...".into());
-
     let instance = wgpu::Instance::default();
-
-    #[cfg(target_arch = "wasm32")]
-    web_sys::console::log_1(&"Requesting wgpu Adapter...".into());
-
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
         })
-        .await;
+        .await?;
 
-    let adapter = match adapter {
-        Some(a) => {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::log_1(&"wgpu Adapter found. Requesting Device...".into());
-            a
-        }
-        None => {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::warn_1(&"Failed to acquire wgpu Adapter".into());
-            return None;
-        }
-    };
-
-    let device_result = adapter
+    let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("ddot-wgpu-device"),
@@ -79,24 +59,13 @@ async fn init_gpu_state() -> Option<WgpuState> {
             },
             None,
         )
-        .await;
-
-    let (device, queue) = match device_result {
-        Ok((d, q)) => {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::log_1(&"wgpu Device successfully created!".into());
-            (d, q)
-        }
-        Err(_e) => {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::warn_1(&format!("Failed to create wgpu Device: {:?}", _e).into());
-            return None;
-        }
-    };
+        .await
+        .ok()?;
 
     Some(WgpuState { device, queue })
 }
 
+#[allow(dead_code)]
 pub async fn is_gpu_available() -> bool {
     get_wgpu_state().await.is_some()
 }
@@ -117,8 +86,6 @@ pub async fn run_gpu(
     });
 
     // 2. Prepare pixel buffers
-    // input_pixels will be binding 0
-    // output_pixels will be binding 1
     let width = image.width;
     let height = image.height;
     let num_pixels = (width * height) as usize;
@@ -151,7 +118,6 @@ pub async fn run_gpu(
     let has_params = !params_bytes.is_empty();
 
     let params_buffer = if has_params {
-        // Ensure params_bytes is padded to 4 bytes
         let mut padded = params_bytes.to_vec();
         while padded.len() % 4 != 0 {
             padded.push(0);
