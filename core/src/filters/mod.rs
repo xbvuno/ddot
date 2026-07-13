@@ -1,4 +1,5 @@
 mod adjustment;
+mod noise;
 
 use crate::{
     filter::{FilterDefinition, FilterError, FilterParams},
@@ -6,8 +7,12 @@ use crate::{
 };
 
 pub use adjustment::{Adjustment, AdjustmentParams};
+pub use noise::{Noise, NoiseParams};
 
-pub const FILTERS: &[FilterDefinition] = &[Adjustment::definition()];
+pub const FILTERS: &[FilterDefinition] = &[
+    Adjustment::definition(),
+    Noise::definition(),
+];
 
 pub fn filter_names() -> impl Iterator<Item = &'static str> {
     FILTERS.iter().map(|filter| filter.name)
@@ -29,6 +34,16 @@ pub fn apply_filter(
             params.validate()?;
 
             Adjustment.apply(image, &params);
+
+            Ok(())
+        }
+
+        Noise::NAME => {
+            let params: NoiseParams = serde_json::from_value(settings)?;
+
+            params.validate()?;
+
+            Noise.apply(image, &params);
 
             Ok(())
         }
@@ -98,8 +113,9 @@ mod tests {
         )
         .expect("apply filter");
 
-        assert_eq!(image.pixels, vec![128, 128, 128, 255]);
+        assert_eq!(image.pixels, vec![54, 54, 54, 255]);
     }
+
 
     #[test]
     fn rejects_out_of_range_serialized_settings() {
