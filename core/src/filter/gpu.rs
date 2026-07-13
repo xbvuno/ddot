@@ -54,7 +54,7 @@ async fn init_gpu_state() -> Option<WgpuState> {
             &wgpu::DeviceDescriptor {
                 label: Some("ddot-wgpu-device"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: adapter.limits(),
                 memory_hints: wgpu::MemoryHints::default(),
             },
             None,
