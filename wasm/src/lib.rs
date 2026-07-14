@@ -1,6 +1,7 @@
 use ddot_core::{
     filters,
     image::Image as CoreImage,
+    image::Color as CoreColor,
     palette::{
         generators::{KMeans, KMeansParams, MedianCut, MedianCutParams, Octree, OctreeParams},
         Palette as CorePalette, PaletteGenerator,
@@ -15,6 +16,10 @@ use ddot_core::{
             Sierra, SierraParams,
             Bayer, BayerParams,
             OnlyPalette, OnlyPaletteParams,
+            Jjn, JjnParams,
+            SierraTwoRow, SierraTwoRowParams,
+            SierraLite, SierraLiteParams,
+            Random, RandomParams,
         },
     },
     transform,
@@ -22,8 +27,6 @@ use ddot_core::{
 use js_sys::{Array, Reflect};
 use wasm_bindgen::{Clamped, prelude::*};
 use web_sys::ImageData;
-
-
 
 #[wasm_bindgen(js_name = Image)]
 pub struct WasmImage {
@@ -186,6 +189,23 @@ pub struct WasmPalette {
 
 #[wasm_bindgen(js_class = Palette)]
 impl WasmPalette {
+    #[wasm_bindgen(constructor)]
+    pub fn new(colors: Array) -> Result<WasmPalette, JsValue> {
+        let mut core_colors = Vec::new();
+        for i in 0..colors.length() {
+            let val = colors.get(i);
+            let obj = js_sys::Object::from(val);
+            let r = Reflect::get(&obj, &JsValue::from_str("r"))?.as_f64().unwrap_or(0.0) as u8;
+            let g = Reflect::get(&obj, &JsValue::from_str("g"))?.as_f64().unwrap_or(0.0) as u8;
+            let b = Reflect::get(&obj, &JsValue::from_str("b"))?.as_f64().unwrap_or(0.0) as u8;
+            let a = Reflect::get(&obj, &JsValue::from_str("a"))?.as_f64().unwrap_or(255.0) as u8;
+            core_colors.push(CoreColor { r, g, b, a });
+        }
+        Ok(WasmPalette {
+            inner: CorePalette { colors: core_colors },
+        })
+    }
+
     #[wasm_bindgen(getter)]
     pub fn colors(&self) -> Array {
         let array = Array::new();
@@ -417,6 +437,10 @@ impl Dithering {
         let si = JsValue::from(WasmSierra::new());
         let ba = JsValue::from(WasmBayer::new());
         let op = JsValue::from(WasmOnlyPalette::new());
+        let j = JsValue::from(WasmJjn::new());
+        let s2 = JsValue::from(WasmSierraTwoRow::new());
+        let sl = JsValue::from(WasmSierraLite::new());
+        let r = JsValue::from(WasmRandom::new());
 
         output.push(&f);
         output.push(&a);
@@ -425,6 +449,10 @@ impl Dithering {
         output.push(&si);
         output.push(&ba);
         output.push(&op);
+        output.push(&j);
+        output.push(&s2);
+        output.push(&sl);
+        output.push(&r);
 
         Reflect::set(&output, &JsValue::from_str("FloydSteinberg"), &f)?;
         Reflect::set(&output, &JsValue::from_str("Atkinson"), &a)?;
@@ -433,6 +461,10 @@ impl Dithering {
         Reflect::set(&output, &JsValue::from_str("Sierra"), &si)?;
         Reflect::set(&output, &JsValue::from_str("Bayer"), &ba)?;
         Reflect::set(&output, &JsValue::from_str("OnlyPalette"), &op)?;
+        Reflect::set(&output, &JsValue::from_str("Jjn"), &j)?;
+        Reflect::set(&output, &JsValue::from_str("SierraTwoRow"), &s2)?;
+        Reflect::set(&output, &JsValue::from_str("SierraLite"), &sl)?;
+        Reflect::set(&output, &JsValue::from_str("Random"), &r)?;
 
         Ok(output)
     }
@@ -447,6 +479,10 @@ impl Dithering {
         Reflect::set(&obj, &JsValue::from_str("Sierra"), &JsValue::from(WasmSierra::new()))?;
         Reflect::set(&obj, &JsValue::from_str("Bayer"), &JsValue::from(WasmBayer::new()))?;
         Reflect::set(&obj, &JsValue::from_str("OnlyPalette"), &JsValue::from(WasmOnlyPalette::new()))?;
+        Reflect::set(&obj, &JsValue::from_str("Jjn"), &JsValue::from(WasmJjn::new()))?;
+        Reflect::set(&obj, &JsValue::from_str("SierraTwoRow"), &JsValue::from(WasmSierraTwoRow::new()))?;
+        Reflect::set(&obj, &JsValue::from_str("SierraLite"), &JsValue::from(WasmSierraLite::new()))?;
+        Reflect::set(&obj, &JsValue::from_str("Random"), &JsValue::from(WasmRandom::new()))?;
         Ok(obj.into())
     }
 }
@@ -466,6 +502,16 @@ impl WasmOnlyPalette {
         "only_palette".to_owned()
     }
 
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
     #[wasm_bindgen(js_name = getParams)]
     pub fn get_params(&self) -> Result<JsValue, JsValue> {
         let params = Array::new();
@@ -481,7 +527,6 @@ impl WasmOnlyPalette {
     }
 }
 
-
 #[wasm_bindgen(js_name = FloydSteinbergDither)]
 pub struct WasmFloydSteinberg;
 
@@ -495,6 +540,16 @@ impl WasmFloydSteinberg {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         "floyd_steinberg".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
     }
 
     #[wasm_bindgen(js_name = getParams)]
@@ -545,6 +600,16 @@ impl WasmAtkinson {
         "atkinson".to_owned()
     }
 
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
     #[wasm_bindgen(js_name = getParams)]
     pub fn get_params(&self) -> Result<JsValue, JsValue> {
         let params = Array::new();
@@ -591,6 +656,16 @@ impl WasmStucki {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         "stucki".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
     }
 
     #[wasm_bindgen(js_name = getParams)]
@@ -641,6 +716,16 @@ impl WasmBurkes {
         "burkes".to_owned()
     }
 
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
     #[wasm_bindgen(js_name = getParams)]
     pub fn get_params(&self) -> Result<JsValue, JsValue> {
         let params = Array::new();
@@ -687,6 +772,16 @@ impl WasmSierra {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         "sierra".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
     }
 
     #[wasm_bindgen(js_name = getParams)]
@@ -737,6 +832,88 @@ impl WasmBayer {
         "bayer".to_owned()
     }
 
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        true
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        Some(include_str!("../../core/src/dithering/gpu/bayer.wgsl").to_string())
+    }
+
+    #[wasm_bindgen(js_name = getParams)]
+    pub fn get_params(&self) -> Result<JsValue, JsValue> {
+        let params = Array::new();
+        let p_amount = js_sys::Object::new();
+        Reflect::set(&p_amount, &JsValue::from_str("name"), &JsValue::from_str("amount"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("type"), &JsValue::from_str("float"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("min"), &JsValue::from(0.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("max"), &JsValue::from(1.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("default"), &JsValue::from(1.0))?;
+        params.push(&p_amount.into());
+
+        let p_scale = js_sys::Object::new();
+        Reflect::set(&p_scale, &JsValue::from_str("name"), &JsValue::from_str("matrixScale"))?;
+        Reflect::set(&p_scale, &JsValue::from_str("type"), &JsValue::from_str("int"))?;
+        Reflect::set(&p_scale, &JsValue::from_str("min"), &JsValue::from(1))?;
+        Reflect::set(&p_scale, &JsValue::from_str("max"), &JsValue::from(8))?;
+        Reflect::set(&p_scale, &JsValue::from_str("default"), &JsValue::from(1))?;
+        params.push(&p_scale.into());
+
+        Ok(params.into())
+    }
+
+    #[wasm_bindgen]
+    pub fn apply(&self, image: &mut WasmImage, palette: &WasmPalette, settings: JsValue) -> Result<(), JsValue> {
+        let (amount, matrix_scale) = if let Some(n) = settings.as_f64() {
+            (n as f32, 1.0)
+        } else {
+            let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let amount = val.get("amount")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(1.0);
+            let scale = val.get("matrixScale")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(1.0);
+            (amount, scale)
+        };
+
+        let alg = Bayer;
+        let core_params = BayerParams { amount, matrix_scale };
+        alg.apply(&mut image.inner, &palette.inner, &core_params);
+        Ok(())
+    }
+}
+
+#[wasm_bindgen(js_name = JjnDither)]
+pub struct WasmJjn;
+
+#[wasm_bindgen(js_class = JjnDither)]
+impl WasmJjn {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        "jjn".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
     #[wasm_bindgen(js_name = getParams)]
     pub fn get_params(&self) -> Result<JsValue, JsValue> {
         let params = Array::new();
@@ -763,8 +940,196 @@ impl WasmBayer {
                 .unwrap_or(1.0)
         };
 
-        let alg = Bayer;
-        let core_params = BayerParams { amount };
+        let alg = Jjn;
+        let core_params = JjnParams { amount };
+        alg.apply(&mut image.inner, &palette.inner, &core_params);
+        Ok(())
+    }
+}
+
+#[wasm_bindgen(js_name = SierraTwoRowDither)]
+pub struct WasmSierraTwoRow;
+
+#[wasm_bindgen(js_class = SierraTwoRowDither)]
+impl WasmSierraTwoRow {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        "two_row_sierra".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
+    #[wasm_bindgen(js_name = getParams)]
+    pub fn get_params(&self) -> Result<JsValue, JsValue> {
+        let params = Array::new();
+        let p_amount = js_sys::Object::new();
+        Reflect::set(&p_amount, &JsValue::from_str("name"), &JsValue::from_str("amount"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("type"), &JsValue::from_str("float"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("min"), &JsValue::from(0.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("max"), &JsValue::from(1.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("default"), &JsValue::from(1.0))?;
+        params.push(&p_amount.into());
+        Ok(params.into())
+    }
+
+    #[wasm_bindgen]
+    pub fn apply(&self, image: &mut WasmImage, palette: &WasmPalette, settings: JsValue) -> Result<(), JsValue> {
+        let amount = if let Some(n) = settings.as_f64() {
+            n as f32
+        } else {
+            let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            val.get("amount")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(1.0)
+        };
+
+        let alg = SierraTwoRow;
+        let core_params = SierraTwoRowParams { amount };
+        alg.apply(&mut image.inner, &palette.inner, &core_params);
+        Ok(())
+    }
+}
+
+#[wasm_bindgen(js_name = SierraLiteDither)]
+pub struct WasmSierraLite;
+
+#[wasm_bindgen(js_class = SierraLiteDither)]
+impl WasmSierraLite {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        "sierra_lite".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        false
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        None
+    }
+
+    #[wasm_bindgen(js_name = getParams)]
+    pub fn get_params(&self) -> Result<JsValue, JsValue> {
+        let params = Array::new();
+        let p_amount = js_sys::Object::new();
+        Reflect::set(&p_amount, &JsValue::from_str("name"), &JsValue::from_str("amount"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("type"), &JsValue::from_str("float"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("min"), &JsValue::from(0.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("max"), &JsValue::from(1.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("default"), &JsValue::from(1.0))?;
+        params.push(&p_amount.into());
+        Ok(params.into())
+    }
+
+    #[wasm_bindgen]
+    pub fn apply(&self, image: &mut WasmImage, palette: &WasmPalette, settings: JsValue) -> Result<(), JsValue> {
+        let amount = if let Some(n) = settings.as_f64() {
+            n as f32
+        } else {
+            let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            val.get("amount")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(1.0)
+        };
+
+        let alg = SierraLite;
+        let core_params = SierraLiteParams { amount };
+        alg.apply(&mut image.inner, &palette.inner, &core_params);
+        Ok(())
+    }
+}
+
+#[wasm_bindgen(js_name = RandomDither)]
+pub struct WasmRandom;
+
+#[wasm_bindgen(js_class = RandomDither)]
+impl WasmRandom {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        "random".to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = supportsGpu)]
+    pub fn supports_gpu(&self) -> bool {
+        true
+    }
+
+    #[wasm_bindgen(getter, js_name = gpuShader)]
+    pub fn gpu_shader(&self) -> Option<String> {
+        Some(include_str!("../../core/src/dithering/gpu/random.wgsl").to_string())
+    }
+
+    #[wasm_bindgen(js_name = getParams)]
+    pub fn get_params(&self) -> Result<JsValue, JsValue> {
+        let params = Array::new();
+        let p_amount = js_sys::Object::new();
+        Reflect::set(&p_amount, &JsValue::from_str("name"), &JsValue::from_str("amount"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("type"), &JsValue::from_str("float"))?;
+        Reflect::set(&p_amount, &JsValue::from_str("min"), &JsValue::from(0.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("max"), &JsValue::from(1.0))?;
+        Reflect::set(&p_amount, &JsValue::from_str("default"), &JsValue::from(0.65))?;
+        params.push(&p_amount.into());
+
+        let p_seed = js_sys::Object::new();
+        Reflect::set(&p_seed, &JsValue::from_str("name"), &JsValue::from_str("seed"))?;
+        Reflect::set(&p_seed, &JsValue::from_str("type"), &JsValue::from_str("float"))?;
+        Reflect::set(&p_seed, &JsValue::from_str("min"), &JsValue::from(0.0))?;
+        Reflect::set(&p_seed, &JsValue::from_str("max"), &JsValue::from(100.0))?;
+        Reflect::set(&p_seed, &JsValue::from_str("default"), &JsValue::from(1.0))?;
+        params.push(&p_seed.into());
+
+        Ok(params.into())
+    }
+
+    #[wasm_bindgen]
+    pub fn apply(&self, image: &mut WasmImage, palette: &WasmPalette, settings: JsValue) -> Result<(), JsValue> {
+        let (amount, seed) = if let Some(n) = settings.as_f64() {
+            (n as f32, 1.0)
+        } else {
+            let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let amount = val.get("amount")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(0.65);
+            let seed = val.get("seed")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(1.0);
+            (amount, seed)
+        };
+
+        let alg = Random;
+        let core_params = RandomParams { amount, seed };
         alg.apply(&mut image.inner, &palette.inner, &core_params);
         Ok(())
     }
@@ -793,7 +1158,33 @@ impl Transform {
         let scaled = transform::resize(&image.inner, width, height);
         Ok(WasmImage { inner: scaled })
     }
+
+    #[wasm_bindgen(js_name = Crop)]
+    pub fn crop(image: &WasmImage, settings: JsValue) -> Result<WasmImage, JsValue> {
+        let val = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let top = val.get("top")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing top parameter"))?;
+
+        let left = val.get("left")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing left parameter"))?;
+
+        let right = val.get("right")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing right parameter"))?;
+
+        let bottom = val.get("bottom")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .ok_or_else(|| JsValue::from_str("missing bottom parameter"))?;
+
+        let cropped = transform::crop(&image.inner, top, left, right, bottom);
+        Ok(WasmImage { inner: cropped })
+    }
 }
-
-
-

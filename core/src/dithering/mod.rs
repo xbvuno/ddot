@@ -99,7 +99,7 @@ mod tests {
     fn test_bayer() {
         let mut img = test_gradient_image();
         let pal = black_white_palette();
-        Bayer.apply(&mut img, &pal, &BayerParams { amount: 1.0 });
+        Bayer.apply(&mut img, &pal, &BayerParams { amount: 1.0, matrix_scale: 1.0 });
         for color in img.colors() {
             assert!(color.r == 0 || color.r == 255);
         }

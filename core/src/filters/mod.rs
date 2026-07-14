@@ -1,6 +1,7 @@
 mod adjustment;
 mod noise;
 mod gaussian_blur;
+mod kawase_blur;
 
 use crate::{
     filter::{Filter, FilterDefinition, FilterError, FilterParams, BackendSupport},
@@ -10,11 +11,13 @@ use crate::{
 pub use adjustment::{Adjustment, AdjustmentParams};
 pub use noise::{Noise, NoiseParams};
 pub use gaussian_blur::{GaussianBlur, GaussianBlurParams};
+pub use kawase_blur::{KawaseBlur, KawaseBlurParams};
 
 pub const FILTERS: &[FilterDefinition] = &[
     Adjustment::definition(),
     Noise::definition(),
     GaussianBlur::definition(),
+    KawaseBlur::definition(),
 ];
 
 pub fn filter_names() -> impl Iterator<Item = &'static str> {
@@ -30,6 +33,7 @@ pub fn filter_backend_support(name: &str) -> Option<BackendSupport> {
         Adjustment::NAME => Some(Adjustment.backend_support()),
         Noise::NAME => Some(Noise.backend_support()),
         GaussianBlur::NAME => Some(GaussianBlur.backend_support()),
+        KawaseBlur::NAME => Some(KawaseBlur.backend_support()),
         _ => None,
     }
 }
@@ -61,6 +65,13 @@ pub fn apply_filter(
             Ok(())
         }
 
+        KawaseBlur::NAME => {
+            let params: KawaseBlurParams = serde_json::from_value(settings)?;
+            params.validate()?;
+            KawaseBlur.apply(image, &params);
+            Ok(())
+        }
+
         _ => Err(FilterError::UnknownFilter(name.to_owned())),
     }
 }
@@ -70,6 +81,7 @@ pub fn filter_gpu_shader(name: &str) -> Option<&'static str> {
         Adjustment::NAME => Adjustment.gpu_shader(),
         Noise::NAME => Noise.gpu_shader(),
         GaussianBlur::NAME => GaussianBlur.gpu_shader(),
+        KawaseBlur::NAME => KawaseBlur.gpu_shader(),
         _ => None,
     }
 }
@@ -164,7 +176,14 @@ mod tests {
         let adj_shader = Adjustment.gpu_shader().expect("adjustment gpu shader");
         assert!(adj_shader.contains("@compute"));
 
-        assert_eq!(filter_backend_support("noise"), Some(BackendSupport::CpuOnly));
-        assert!(Noise.gpu_shader().is_none());
+        // Noise now supports GPU
+        assert_eq!(filter_backend_support("noise"), Some(BackendSupport::CpuAndGpu));
+        let noise_shader = Noise.gpu_shader().expect("noise gpu shader");
+        assert!(noise_shader.contains("@compute"));
+
+        // KawaseBlur supports GPU
+        assert_eq!(filter_backend_support("kawase_blur"), Some(BackendSupport::CpuAndGpu));
+        let kawase_shader = KawaseBlur.gpu_shader().expect("kawase blur gpu shader");
+        assert!(kawase_shader.contains("@compute"));
     }
 }
