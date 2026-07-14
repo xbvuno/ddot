@@ -28,6 +28,15 @@ use js_sys::{Array, Reflect};
 use wasm_bindgen::{Clamped, prelude::*};
 use web_sys::ImageData;
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Backend {
+    AUTO = 0,
+    CPU = 1,
+    GPU = 2,
+    DISABLED = 3,
+}
+
 #[wasm_bindgen(js_name = Image)]
 pub struct WasmImage {
     inner: CoreImage,
@@ -172,7 +181,7 @@ impl FilterHandle {
         &self,
         image: &mut WasmImage,
         settings: JsValue,
-        _backend: JsValue,
+        backend: Backend,
     ) -> Result<(), JsValue> {
         let settings = serde_wasm_bindgen::from_value::<serde_json::Value>(settings)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
