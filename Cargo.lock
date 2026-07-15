@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "ddot-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytemuck",
  "clap",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "ddot-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytemuck",
  "ddot-core-macros",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "ddot-core-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "ddot-wasm"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ddot-core",
  "js-sys",

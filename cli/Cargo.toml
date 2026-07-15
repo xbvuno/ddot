@@ -1,6 +1,6 @@
 [package]
 name = "ddot-cli"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "CLI for ddot — apply image filter pipelines with CPU/GPU backend"
 readme = "../README.md"
@@ -12,7 +12,7 @@ categories = ["multimedia::images", "command-line-utilities"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-ddot-core = { version = "0.1.1", path = "../core" }
+ddot-core = { version = "0.1.2", path = "../core" }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
