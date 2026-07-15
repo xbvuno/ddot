@@ -319,8 +319,11 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "ddot-core-macros",
+ "pollster",
  "serde",
  "serde_json",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]
