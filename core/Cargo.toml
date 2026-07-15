@@ -1,6 +1,6 @@
 [package]
 name = "ddot-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "High-performance image processing core — filters, dithering, palette generation, GPU compute via wgpu/WebGPU"
 readme = "../README.md"
@@ -12,7 +12,7 @@ categories = ["multimedia::images", "graphics"]
 
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
-ddot-core-macros = { version = "0.1.0", path = "../core-macros" }
+ddot-core-macros = { version = "0.1.1", path = "../core-macros" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wgpu = { version = "22.1.0", features = ["webgpu"] }
