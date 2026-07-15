@@ -1,6 +1,6 @@
 [package]
 name = "ddot-core-macros"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Procedural macros for ddot-core — #[derive(Filter)] and #[derive(FilterParams)]"
 readme = "../README.md"
