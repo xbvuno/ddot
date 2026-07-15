@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 0: Test — gate for all publish jobs
+  # ─────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests (excluding ddot-wasm)
+        run: cargo test --workspace --exclude ddot-wasm
+
+  # ─────────────────────────────────────────────
+  # Job 1: Publish ddot-core-macros to crates.io
+  # ─────────────────────────────────────────────
+  publish-core-macros:
+    name: Publish ddot-core-macros (crates.io)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Publish ddot-core-macros
+        run: cargo publish -p ddot-core-macros --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # Job 2: Publish ddot-core to crates.io
+  #         (depends on ddot-core-macros being indexed)
+  # ─────────────────────────────────────────────
+  publish-core:
+    name: Publish ddot-core (crates.io)
+    needs: publish-core-macros
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Wait for crates.io to index ddot-core-macros
+        run: sleep 30
+
+      - name: Publish ddot-core
+        run: cargo publish -p ddot-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # Job 3: Publish ddot-cli to crates.io
+  #         (depends on ddot-core being indexed)
+  # ─────────────────────────────────────────────
+  publish-cli:
+    name: Publish ddot-cli (crates.io)
+    needs: publish-core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Wait for crates.io to index ddot-core
+        run: sleep 30
+
+      - name: Publish ddot-cli
+        run: cargo publish -p ddot-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # Job 4: Build WASM and publish ddot-wasm to npm
+  #         (runs in parallel with crates.io jobs)
+  # ─────────────────────────────────────────────
+  publish-wasm:
+    name: Publish ddot-wasm (npm)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build WASM package
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+          wasm-pack build wasm --release --target web
+
+      - name: Set package name to ddot-wasm
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('wasm/pkg/package.json', 'utf8'));
+            pkg.name = 'ddot-wasm';
+            pkg.repository = { type: 'git', url: 'https://github.com/xbvuno/ddot' };
+            pkg.homepage = 'https://github.com/xbvuno/ddot';
+            fs.writeFileSync('wasm/pkg/package.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: wasm-pack publish wasm/pkg --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
