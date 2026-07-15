@@ -7,6 +7,13 @@ pub enum ParamType {
     Float,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendSupport {
+    CpuOnly,
+    CpuAndGpu,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct ParamDefinition {
     pub name: &'static str,

@@ -1,14 +1,16 @@
 use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 use std::f32::consts::{PI, TAU};
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, Pod, Zeroable, Deserialize, Serialize)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
     pub a: u8,
 }
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hsl {

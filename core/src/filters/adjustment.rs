@@ -16,10 +16,10 @@ pub struct AdjustmentParams {
     #[param(min = -0.5, max = 0.5, default = 0.0)]
     pub whites: f32,
 
-    #[param(min = -100, max = 100, default = 0)]
-    pub contrast: i32,
+    #[param(min = -100.0, max = 500.0, default = 0.0)]
+    pub contrast: f32,
 
-    #[param(min = 0.0, max = 2.0, default = 1.0)]
+    #[param(min = 0.0, max = 10.0, default = 1.0)]
     pub saturation: f32,
 
     #[param(min = -PI, max = PI, default = 0.0)]
@@ -29,12 +29,19 @@ pub struct AdjustmentParams {
 #[derive(Filter)]
 #[filter(params = AdjustmentParams)]
 pub struct Adjustment;
+
+impl crate::filter::GpuFilter for Adjustment {
+    fn gpu_shader(&self) -> &'static str {
+        include_str!("gpu/adjustment.wgsl")
+    }
+}
+
 impl Adjustment {
     pub fn apply(&self, image: &mut Image, params: &AdjustmentParams) {
         let do_lut = params.gamma != 1.0
             || params.blacks != 0.0
             || params.whites != 0.0
-            || params.contrast != 0;
+            || params.contrast != 0.0;
 
         let do_sat = params.saturation != 1.0;
         let do_hue = params.hue != 0.0;
@@ -73,8 +80,9 @@ impl Adjustment {
     fn build_lut(params: &AdjustmentParams) -> [u8; 256] {
         let gamma_exp = 1.0 / params.gamma;
 
-        let contrast_factor = (259.0 * (params.contrast as f32 + 255.0))
-            / (255.0 * (259.0 - params.contrast as f32));
+        let contrast_val = params.contrast.clamp(-255.0, 258.0);
+        let contrast_factor = (259.0 * (contrast_val + 255.0))
+            / (255.0 * (259.0 - contrast_val));
 
         let mut lut = [0u8; 256];
 
@@ -97,7 +105,7 @@ impl Adjustment {
                 v += params.whites * highlight;
             }
 
-            if params.contrast != 0 {
+            if params.contrast != 0.0 {
                 v = (v - 0.5) * contrast_factor + 0.5;
             }
 
