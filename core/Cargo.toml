@@ -2,6 +2,12 @@
 name = "ddot-core"
 version = "0.1.0"
 edition = "2024"
+description = "High-performance image processing core — filters, dithering, palette generation, GPU compute via wgpu/WebGPU"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/xbvuno/ddot"
+homepage = "https://github.com/xbvuno/ddot"
+keywords = ["image", "dithering", "wasm", "gpu", "processing"]
+categories = ["multimedia::images", "graphics"]
 
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
